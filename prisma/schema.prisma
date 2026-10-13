@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client"
+  output = "../src/generated/prisma"
+}
+datasource db {
+  provider = "postgresql"
+}
+model User {
+  id String @id
+  name String
+  email String @unique
+  emailVerified Boolean @default(false)
+  image String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sessions Session[]
+  accounts Account[]
+  workshop Workshop?
+}
+model Session {
+  id String @id
+  expiresAt DateTime
+  token String @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+model Account {
+  id String @id
+  accountId String
+  providerId String
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken String?
+  refreshToken String?
+  idToken String?
+  accessTokenExpiresAt DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope String?
+  password String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId])
+}
+model Verification {
+  id String @id
+  identifier String
+  value String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([identifier])
+}
+model Workshop {
+  id String @id @default(cuid())
+  ownerId String @unique
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name String
+  estimates Estimate[]
+}
+model Estimate {
+  id String @id @default(cuid())
+  number Int @unique @default(autoincrement())
+  workshopId String
+  workshop Workshop @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+  currentVersionId String?
+  createdAt DateTime @default(now())
+  versions Version[]
+  @@index([workshopId])
+}
+model Version {
+  id String @id @default(cuid())
+  estimateId String
+  estimate Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  number Int
+  clientName String
+  device String
+  note String
+  explanation String
+  completion String
+  warranty String
+  validUntil DateTime
+  total Int
+  publishedAt DateTime?
+  replacedAt DateTime?
+  createdAt DateTime @default(now())
+  items Item[]
+  questions Question[]
+  decision Decision?
+  links PublicLink[]
+  events Event[]
+  @@unique([estimateId, number])
+}
+model Item {
+  id String @id @default(cuid())
+  versionId String
+  version Version @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  name String
+  quantity Int
+  price Int
+  position Int
+}
+model Question {
+  id String @id @default(cuid())
+  versionId String
+  version Version @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  text String
+  answer String?
+  createdAt DateTime @default(now())
+  answeredAt DateTime?
+}
+model Decision {
+  id String @id @default(cuid())
+  versionId String @unique
+  version Version @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  outcome String
+  createdAt DateTime @default(now())
+}
+model PublicLink {
+  id String @id @default(cuid())
+  versionId String
+  version Version @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  tokenHash String @unique
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+}
+model Event {
+  id String @id @default(cuid())
+  versionId String
+  version Version @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  type String
+  createdAt DateTime @default(now())
+}
+model Throttle {
+  key String @id
+  count Int
+  expiresAt DateTime
+}

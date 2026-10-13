@@ -1,0 +1,2 @@
+import { defineConfig } from "@playwright/test";
+export default defineConfig({ testDir: "tests/e2e", timeout: 60000, workers: 1, use: { baseURL: "http://localhost:3078", headless: true, trace: "off", screenshot: "off" }, reporter: "list", webServer: { command: "node node_modules/next/dist/bin/next start --port 3078 --hostname 127.0.0.1", url: "http://localhost:3078", timeout: 60000, reuseExistingServer: false, stdout: "ignore", stderr: "pipe" } });
