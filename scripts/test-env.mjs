@@ -16,6 +16,8 @@ export function testEnv(port = 3078) {
     DATABASE_URL: target,
     BETTER_AUTH_URL: `http://localhost:${port}`,
     TEST_RUN: "1",
+    AI_API_KEY: "",
+    AI_MODEL: "",
   };
 }
 export function run(file, args, env) {

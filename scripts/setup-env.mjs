@@ -7,7 +7,7 @@ if (!existsSync(file)) {
   const secret = randomBytes(48).toString("hex");
   writeFileSync(
     file,
-    `DATABASE_URL=postgresql://soglasovano:${password}@localhost:55477/soglasovano\nTEST_DATABASE_URL=postgresql://soglasovano:${password}@localhost:55477/soglasovano_test\nPOSTGRES_PASSWORD=${password}\nBETTER_AUTH_SECRET=${secret}\nBETTER_AUTH_URL=http://localhost:3077\nAI_API_KEY=\nAI_BASE_URL=https://api.openai.com/v1\nAI_MODEL=\n`,
+    `DATABASE_URL=postgresql://soglasovano:${password}@localhost:55477/soglasovano\nTEST_DATABASE_URL=postgresql://soglasovano:${password}@localhost:55477/soglasovano_test\nPOSTGRES_PASSWORD=${password}\nBETTER_AUTH_SECRET=${secret}\nBETTER_AUTH_URL=http://localhost:3077\nAI_API_KEY=\nAI_BASE_URL=https://openrouter.ai/api/v1\nAI_MODEL=liquid/lfm-2.5-2.6b:free\n`,
   );
 }
 process.loadEnvFile(file);

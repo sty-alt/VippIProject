@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, it, expect } from "vitest";
+import { afterAll, beforeAll, describe, it, expect, vi } from "vitest";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { generateExplanation, redact } from "../../src/lib/ai";
@@ -37,6 +37,27 @@ afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 describe("HTTP AI адаптер", () => {
+  it("отправляет OpenRouter точную схему, сохраняя серверную проверку", async () => {
+    mode = "good";
+    const originalFetch = globalThis.fetch;
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) =>
+      originalFetch(`${base}/chat/completions`, init),
+    );
+    try {
+      await generateExplanation(input, {
+        key: "test-key",
+        model: "test-model",
+        base: "https://openrouter.ai/api/v1",
+      });
+      const body = JSON.parse(received);
+      expect(body.response_format.type).toBe("json_schema");
+      expect(body.response_format.json_schema.strict).toBe(true);
+      expect(body.response_format.json_schema.schema.properties.works.type).toBe("string");
+      expect(body.response_format.json_schema.schema.additionalProperties).toBe(false);
+    } finally {
+      spy.mockRestore();
+    }
+  });
   it("валидирует настоящий HTTP ответ и удаляет очевидные идентификаторы", async () => {
     mode = "good";
     const output = await generateExplanation(input, { key: "test-key", model: "test-model", base });
