@@ -4,15 +4,223 @@ import { api, type PublicEstimate } from "./types";
 import { Badge, Conditions, ErrorBox } from "./ui";
 import { money, date } from "@/lib/locale";
 export function PublicPage({ token }: { token: string }) {
-  const [data, setData] = useState<PublicEstimate | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false), [mode, setMode] = useState<"approved" | "declined" | "question" | null>(null), [accepted, setAccepted] = useState(false), [question, setQuestion] = useState("");
-  useEffect(() => { api<PublicEstimate>(`public/${token}`).then(setData).catch(e => setError(e.message)); }, [token]);
+  const [data, setData] = useState<PublicEstimate | null>(null),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false),
+    [mode, setMode] = useState<"approved" | "declined" | "question" | null>(null),
+    [accepted, setAccepted] = useState(false),
+    [question, setQuestion] = useState("");
+  useEffect(() => {
+    api<PublicEstimate>(`public/${token}`)
+      .then(setData)
+      .catch((e) => setError(e.message));
+  }, [token]);
   async function submit(e: React.FormEvent) {
-    e.preventDefault(); setBusy(true); setError("");
-    try { await api(`public/${token}`, { action: mode, accepted, text: question || undefined }); setMode(null); setQuestion(""); setData(await api(`public/${token}`)); }
-    catch (e) { setError((e as Error).message); const fresh = await api<PublicEstimate>(`public/${token}`).catch(() => null); if (fresh) setData(fresh); } finally { setBusy(false); }
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await api(`public/${token}`, { action: mode, accepted, text: question || undefined });
+      setMode(null);
+      setQuestion("");
+      setData(await api(`public/${token}`));
+    } catch (e) {
+      setError((e as Error).message);
+      const fresh = await api<PublicEstimate>(`public/${token}`).catch(() => null);
+      if (fresh) setData(fresh);
+    } finally {
+      setBusy(false);
+    }
   }
-  if (!data) return <main className="public-wrap"><div className="public-brand"><span className="brand-mark" aria-hidden="true">✓</span> Согласовано</div><ErrorBox message={error} />{!error && <p role="status">Загружаем предложение…</p>}</main>;
-  const pending = data.questions.some(q => !q.answeredAt);
+  if (!data)
+    return (
+      <main className="public-wrap">
+        <div className="public-brand">
+          <span className="brand-mark" aria-hidden="true">
+            ✓
+          </span>{" "}
+          Согласовано
+        </div>
+        <ErrorBox message={error} />
+        {!error && <p role="status">Загружаем предложение…</p>}
+      </main>
+    );
+  const pending = data.questions.some((q) => !q.answeredAt);
   const canAct = data.available && !pending;
-  return <main className="public-wrap"><header className="public-header"><span className="brand-mark" aria-hidden="true">✓</span><div><strong>{data.workshop}</strong><small>Предложение по ремонту</small></div></header><section className="panel public-card"><div className="section-title"><span className="eyebrow">Смета № {String(data.number).padStart(4, "0")} · версия {data.version}</span><Badge status={data.status} /></div><Conditions data={data} /><ErrorBox message={error} />{data.decision && <div className="decision-note" role="status"><strong>{data.decision.outcome === "approved" ? "Вы согласовали ремонт" : "Вы отказались от ремонта"}</strong><p>{date(data.decision.createdAt)} · Ответ сохранён для этой версии.</p></div>}{data.status === "replaced" && <p className="hint">Эта версия заменена. Запросите у мастерской новую ссылку. Прежнее решение сохранено.</p>}{data.revoked && <p className="hint">Эта ссылка отозвана. Обратитесь в мастерскую за актуальным предложением.</p>}{data.status === "expired" && <p className="hint">Срок предложения истёк. Запросите актуальную смету у мастерской.</p>}{pending && <p className="hint">Ваш вопрос отправлен. Дождитесь ответа мастерской, прежде чем принимать решение.</p>}{canAct && <div className="client-actions"><button className="primary wide" disabled={busy} onClick={() => { setAccepted(false); setMode("approved"); }}>Согласовать ремонт</button><div className="two-col"><button className="secondary" disabled={busy} onClick={() => setMode("question")}>Задать вопрос</button><button className="text-button" disabled={busy} onClick={() => setMode("declined")}>Отказаться</button></div></div>}{mode && canAct && <form className="confirmation" onSubmit={submit}><h3>{mode === "approved" ? "Подтвердите согласование" : mode === "declined" ? "Отказаться от ремонта?" : "Ваш вопрос мастерской"}</h3>{mode === "approved" && <><p>Итоговая сумма: <strong>{money(data.total)}</strong></p><label className="checkbox"><input type="checkbox" required checked={accepted} onChange={e => setAccepted(e.target.checked)} /><span>Я ознакомился с работами, итоговой суммой, сроком и условиями гарантии.</span></label></>}{mode === "declined" && <p>Отказ будет сохранён. Изменить решение в этой версии будет нельзя.</p>}{mode === "question" && <label>Вопрос<textarea autoFocus rows={3} required maxLength={2000} value={question} onChange={e => setQuestion(e.target.value)} placeholder="Что вы хотите уточнить?" /></label>}<div className="actions"><button className={mode === "declined" ? "danger" : "primary"} disabled={busy || (mode === "approved" && !accepted)}>{busy ? "Сохраняем…" : mode === "approved" ? "Подтвердить согласование" : mode === "declined" ? "Подтвердить отказ" : "Отправить вопрос"}</button><button type="button" className="secondary" disabled={busy} onClick={() => setMode(null)}>Отмена</button></div></form>}</section>{data.questions.length > 0 && <section className="panel public-card"><h2>Вопросы и ответы</h2>{data.questions.map((q, i) => <div className="question-card" key={i}><strong>Ваш вопрос</strong><p>{q.text}</p>{q.answer ? <div className="answer"><strong>Ответ мастерской</strong><p>{q.answer}</p></div> : <small>Ожидаем ответ мастерской</small>}</div>)}</section>}<button className="secondary wide" disabled={busy} onClick={() => api<PublicEstimate>(`public/${token}`).then(setData).catch(e => setError(e.message))}>Обновить страницу</button><p className="public-disclaimer">Кнопка фиксирует ответ держателя ссылки без проверки личности. Это не квалифицированная электронная подпись. Не передавайте ссылку посторонним.</p><footer>Согласовано · Понятный ремонт</footer></main>;
+  return (
+    <main className="public-wrap">
+      <header className="public-header">
+        <span className="brand-mark" aria-hidden="true">
+          ✓
+        </span>
+        <div>
+          <strong>{data.workshop}</strong>
+          <small>Предложение по ремонту</small>
+        </div>
+      </header>
+      <section className="panel public-card">
+        <div className="section-title">
+          <span className="eyebrow">
+            Смета № {String(data.number).padStart(4, "0")} · версия {data.version}
+          </span>
+          <Badge status={data.status} />
+        </div>
+        <Conditions data={data} />
+        <ErrorBox message={error} />
+        {data.decision && (
+          <div className="decision-note" role="status">
+            <strong>
+              {data.decision.outcome === "approved"
+                ? "Вы согласовали ремонт"
+                : "Вы отказались от ремонта"}
+            </strong>
+            <p>{date(data.decision.createdAt)} · Ответ сохранён для этой версии.</p>
+          </div>
+        )}
+        {data.status === "replaced" && (
+          <p className="hint">
+            Эта версия заменена. Запросите у мастерской новую ссылку. Прежнее решение сохранено.
+          </p>
+        )}
+        {data.revoked && (
+          <p className="hint">
+            Эта ссылка отозвана. Обратитесь в мастерскую за актуальным предложением.
+          </p>
+        )}
+        {data.status === "expired" && (
+          <p className="hint">Срок предложения истёк. Запросите актуальную смету у мастерской.</p>
+        )}
+        {pending && (
+          <p className="hint">
+            Ваш вопрос отправлен. Дождитесь ответа мастерской, прежде чем принимать решение.
+          </p>
+        )}
+        {canAct && (
+          <div className="client-actions">
+            <button
+              className="primary wide"
+              disabled={busy}
+              onClick={() => {
+                setAccepted(false);
+                setMode("approved");
+              }}
+            >
+              Согласовать ремонт
+            </button>
+            <div className="two-col">
+              <button className="secondary" disabled={busy} onClick={() => setMode("question")}>
+                Задать вопрос
+              </button>
+              <button className="text-button" disabled={busy} onClick={() => setMode("declined")}>
+                Отказаться
+              </button>
+            </div>
+          </div>
+        )}
+        {mode && canAct && (
+          <form className="confirmation" onSubmit={submit}>
+            <h3>
+              {mode === "approved"
+                ? "Подтвердите согласование"
+                : mode === "declined"
+                  ? "Отказаться от ремонта?"
+                  : "Ваш вопрос мастерской"}
+            </h3>
+            {mode === "approved" && (
+              <>
+                <p>
+                  Итоговая сумма: <strong>{money(data.total)}</strong>
+                </p>
+                <label className="checkbox">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={accepted}
+                    onChange={(e) => setAccepted(e.target.checked)}
+                  />
+                  <span>
+                    Я ознакомился с работами, итоговой суммой, сроком и условиями гарантии.
+                  </span>
+                </label>
+              </>
+            )}
+            {mode === "declined" && (
+              <p>Отказ будет сохранён. Изменить решение в этой версии будет нельзя.</p>
+            )}
+            {mode === "question" && (
+              <label>
+                Вопрос
+                <textarea
+                  autoFocus
+                  rows={3}
+                  required
+                  maxLength={2000}
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  placeholder="Что вы хотите уточнить?"
+                />
+              </label>
+            )}
+            <div className="actions">
+              <button
+                className={mode === "declined" ? "danger" : "primary"}
+                disabled={busy || (mode === "approved" && !accepted)}
+              >
+                {busy
+                  ? "Сохраняем…"
+                  : mode === "approved"
+                    ? "Подтвердить согласование"
+                    : mode === "declined"
+                      ? "Подтвердить отказ"
+                      : "Отправить вопрос"}
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy}
+                onClick={() => setMode(null)}
+              >
+                Отмена
+              </button>
+            </div>
+          </form>
+        )}
+      </section>
+      {data.questions.length > 0 && (
+        <section className="panel public-card">
+          <h2>Вопросы и ответы</h2>
+          {data.questions.map((q, i) => (
+            <div className="question-card" key={i}>
+              <strong>Ваш вопрос</strong>
+              <p>{q.text}</p>
+              {q.answer ? (
+                <div className="answer">
+                  <strong>Ответ мастерской</strong>
+                  <p>{q.answer}</p>
+                </div>
+              ) : (
+                <small>Ожидаем ответ мастерской</small>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
+      <button
+        className="secondary wide"
+        disabled={busy}
+        onClick={() =>
+          api<PublicEstimate>(`public/${token}`)
+            .then(setData)
+            .catch((e) => setError(e.message))
+        }
+      >
+        Обновить страницу
+      </button>
+      <p className="public-disclaimer">
+        Кнопка фиксирует ответ держателя ссылки без проверки личности. Это не квалифицированная
+        электронная подпись. Не передавайте ссылку посторонним.
+      </p>
+      <footer>Согласовано · Понятный ремонт</footer>
+    </main>
+  );
 }

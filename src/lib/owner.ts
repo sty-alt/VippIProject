@@ -5,5 +5,7 @@ import { AppError } from "./security";
 export async function owner() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) throw new AppError("Войдите в аккаунт.", 401);
-  return db.workshop.upsert({ where: { ownerId: session.user.id }, update: {}, create: { ownerId: session.user.id, name: session.user.name } });
+  const workshop = await db.workshop.findUnique({ where: { ownerId: session.user.id } });
+  if (!workshop) throw new AppError("Мастерская недоступна.", 403);
+  return workshop;
 }

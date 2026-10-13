@@ -5,6 +5,7 @@ services:
       POSTGRES_USER: soglasovano
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_only}
       POSTGRES_DB: soglasovano
+      TZ: UTC
     ports:
       - "127.0.0.1:55477:5432"
     volumes:

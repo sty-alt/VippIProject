@@ -1,15 +1,40 @@
 import { createHash, randomBytes } from "node:crypto";
 import { db } from "./db";
-export class AppError extends Error { constructor(message: string, public status = 400) { super(message); } }
+export class AppError extends Error {
+  constructor(
+    message: string,
+    public status = 400,
+  ) {
+    super(message);
+  }
+}
 export const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 export const newToken = () => randomBytes(32).toString("base64url");
 export function checkOrigin(request: Request) {
-  if (request.headers.get("origin") !== new URL(process.env.BETTER_AUTH_URL!).origin) throw new AppError("Запрос отклонён. Обновите страницу.", 403);
+  if (request.headers.get("origin") !== new URL(process.env.BETTER_AUTH_URL!).origin)
+    throw new AppError("Запрос отклонён. Обновите страницу.", 403);
 }
 export async function readBody(request: Request) {
-  const body = await request.text();
-  if (Buffer.byteLength(body) > 32_000) throw new AppError("Слишком большой запрос.", 413);
-  try { return JSON.parse(body); } catch { throw new AppError("Некорректный запрос."); }
+  const reader = request.body?.getReader();
+  if (!reader) throw new AppError("Некорректный запрос.");
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > 32000) {
+      await reader.cancel();
+      throw new AppError("Слишком большой запрос.", 413);
+    }
+    chunks.push(value);
+  }
+  const body = Buffer.concat(chunks).toString("utf8");
+  try {
+    return JSON.parse(body);
+  } catch {
+    throw new AppError("Некорректный запрос.");
+  }
 }
 export async function throttle(scope: string, subject: string, max: number, seconds = 60) {
   const key = hashToken(`${scope}:${subject}`);

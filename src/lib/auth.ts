@@ -6,7 +6,13 @@ export const auth = betterAuth({
   emailAndPassword: { enabled: true, minPasswordLength: 10, maxPasswordLength: 128 },
   trustedOrigins: [process.env.BETTER_AUTH_URL!],
   session: { expiresIn: 60 * 60 * 24 * 7, cookieCache: { enabled: false } },
-  advanced: { defaultCookieAttributes: { sameSite: "lax", httpOnly: true, secure: process.env.BETTER_AUTH_URL?.startsWith("https:") } },
+  advanced: {
+    defaultCookieAttributes: {
+      sameSite: "lax",
+      httpOnly: true,
+      secure: process.env.BETTER_AUTH_URL?.startsWith("https:"),
+    },
+  },
   rateLimit: { enabled: true, window: 60, max: 15 },
-  logger: { disabled: true }
+  logger: { disabled: true },
 });
