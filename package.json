@@ -6,6 +6,7 @@
     "node": ">=22.22.0"
   },
   "scripts": {
+    "demo": "node scripts/demo.mjs",
     "dev": "next dev --port 3077 --hostname 127.0.0.1",
     "build": "prisma generate && next build",
     "start": "next start --port 3077 --hostname 127.0.0.1",
