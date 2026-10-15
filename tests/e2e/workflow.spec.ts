@@ -285,6 +285,19 @@ test("HTTP: сессии, изоляция мастерских, CSRF, вход�
   });
   expect((await guest.get("/api/service/estimates")).status()).toBe(401);
   expect((await guest.get("/api/service/templates")).status()).toBe(401);
+  expect(
+    (
+      await guest.post("/api/service/ai/catalog", { data: { note: "Нужна чистка", works: [] } })
+    ).status(),
+  ).toBe(401);
+  expect(
+    (
+      await a.post("/api/service/ai/catalog", {
+        headers: { Origin: "https://untrusted.example" },
+        data: { note: "Нужна чистка", works: [] },
+      })
+    ).status(),
+  ).toBe(403);
   const view = await guest.get(`/api/service/public/${token}`);
   expect(view.headers()["cache-control"]).toContain("no-store");
   const publicJSON = JSON.stringify(await view.json());

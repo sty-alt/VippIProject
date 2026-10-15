@@ -38,6 +38,12 @@ export type Row = {
   hasQuestion: boolean;
 };
 export type ServiceTemplate = { id: string; name: string; price: number; quantity: number };
+export type CatalogDraft = {
+  problem: string;
+  works: string;
+  missing: string[];
+  items: { catalogId: string; evidence: string; name: string; price: number; quantity: number }[];
+};
 export type PublicEstimate = {
   workshop: string;
   number: number;

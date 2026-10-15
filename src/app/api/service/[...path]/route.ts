@@ -15,6 +15,7 @@ import {
   versionInclude,
 } from "@/lib/estimates";
 import { generateExplanation } from "@/lib/ai";
+import { draftFromCatalog } from "@/lib/ai-catalog-service";
 import { listTemplates, saveTemplate, removeTemplate } from "@/lib/templates";
 import { z } from "zod";
 export const dynamic = "force-dynamic";
@@ -106,7 +107,11 @@ export async function POST(request: Request, context: Context) {
         return json(await removeTemplate(workshop.id, path[1]));
       throw new AppError("Действие недоступно.", 404);
     }
-    if (path[0] === "ai") {
+    if (path[0] === "ai" && path.length === 2 && path[1] === "catalog") {
+      await throttle("ai", workshop.id, 5);
+      return json(await draftFromCatalog(workshop.id, body));
+    }
+    if (path[0] === "ai" && path.length === 1) {
       await throttle("ai", workshop.id, 5);
       return json(await generateExplanation(body));
     }

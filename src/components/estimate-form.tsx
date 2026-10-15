@@ -7,6 +7,7 @@ import { money } from "@/lib/locale";
 import { api, type Estimate, type Version, type ServiceTemplate } from "./types";
 import { Conditions, ErrorBox } from "./ui";
 import { readRecovery, recoveryPrefix } from "@/lib/draft-recovery";
+import { CatalogAssistant } from "./catalog-assistant";
 type AIResult = { problem: string; works: string; missing: string[] };
 function initial(v?: Version): EstimateInput {
   return v
@@ -266,7 +267,7 @@ export function EstimateForm({
           <section className="panel form-section">
             <div className="section-title">
               <h2>Понятное объяснение</h2>
-              <span className="subtle-label">AI помогает с текстом</span>
+              <span className="subtle-label">AI помогает подготовить смету</span>
             </div>
             <label>
               Заметка мастера <span className="optional">· только для вас</span>
@@ -278,10 +279,25 @@ export function EstimateForm({
                 placeholder="Что обнаружено и какие работы нужны"
               />
               <small>
+                AI получает заметку и названия работ; при подборе — также названия вашего каталога.
                 Не вводите персональные или конфиденциальные данные. Очевидные телефоны и email
                 удаляются перед AI-запросом; полная анонимизация не гарантируется.
               </small>
             </label>
+            <CatalogAssistant
+              note={form.note}
+              items={form.items}
+              explanation={form.explanation}
+              available={templates.length > 0}
+              aiEnabled={aiEnabled}
+              busy={busy}
+              onBusyChange={setBusy}
+              onApply={(items, explanation) => {
+                setForm((f) => ({ ...f, items, explanation }));
+                setDirty(true);
+                dirtyRef.current = true;
+              }}
+            />
             <button
               type="button"
               className="secondary"
