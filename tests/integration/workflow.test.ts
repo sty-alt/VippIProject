@@ -11,6 +11,7 @@ import {
   publicView,
   answerQuestion,
   manageLink,
+  listEstimates,
 } from "../../src/lib/estimates";
 const input = {
   clientName: "Азиз (тест)",
@@ -73,6 +74,16 @@ describe("PostgreSQL жизненный цикл", () => {
       () => answerQuestion(b, e.id, "x", "Ответ"),
     ])
       await expect(action()).rejects.toThrow("недоступна");
+  });
+  it("список мастерской показывает статус, вопрос и черновик без чужих смет", async () => {
+    const { e, token } = await fixture();
+    await publicAction(token, { action: "question", text: "Кулер новый?" });
+    await cloneDraft(a, e.id);
+    const row = (await listEstimates(a)).find((r) => r.id === e.id)!;
+    expect(row).toMatchObject({ status: "clarification", hasQuestion: true, hasDraft: true });
+    expect(row.total).toBe(400000);
+    expect(row).not.toHaveProperty("note");
+    expect((await listEstimates(b)).some((r) => r.id === e.id)).toBe(false);
   });
   it("не доверяет присланному итогу и исключает внутренние поля из публичного ответа", async () => {
     const e = await createEstimate(a, { ...input, total: 1 });

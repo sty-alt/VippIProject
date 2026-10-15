@@ -12,7 +12,18 @@ export const versionInclude = {
   events: { orderBy: { createdAt: "desc" as const } },
 };
 export type FullVersion = Prisma.VersionGetPayload<{ include: typeof versionInclude }>;
-export function status(v: FullVersion, now = new Date()): Status {
+// Only the columns needed to compute a status; the dashboard list must not load items or events.
+const statusSelect = {
+  id: true,
+  publishedAt: true,
+  replacedAt: true,
+  validUntil: true,
+  decision: { select: { outcome: true } },
+  links: { select: { revokedAt: true } },
+  questions: { select: { answeredAt: true } },
+} satisfies Prisma.VersionSelect;
+type StatusInput = Prisma.VersionGetPayload<{ select: typeof statusSelect }>;
+export function status(v: StatusInput, now = new Date()): Status {
   if (!v.publishedAt) return "draft";
   if (v.replacedAt) return "replaced";
   if (v.decision) return v.decision.outcome === "approved" ? "approved" : "declined";
@@ -44,6 +55,36 @@ export async function createEstimate(workshopId: string, input: unknown) {
   return db.estimate.create({
     data: { workshopId, versions: { create: { ...data(input), number: 1 } } },
     include: { versions: true },
+  });
+}
+export async function listEstimates(workshopId: string) {
+  const estimates = await db.estimate.findMany({
+    where: { workshopId },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      number: true,
+      createdAt: true,
+      currentVersionId: true,
+      versions: {
+        orderBy: { number: "desc" },
+        select: { ...statusSelect, device: true, clientName: true, total: true },
+      },
+    },
+  });
+  return estimates.map((e) => {
+    const v = e.versions.find((v) => v.id === e.currentVersionId) ?? e.versions[0];
+    return {
+      id: e.id,
+      number: e.number,
+      device: v.device,
+      clientName: v.clientName,
+      total: v.total,
+      createdAt: e.createdAt,
+      status: status(v),
+      hasDraft: !!e.currentVersionId && e.versions.some((v) => !v.publishedAt),
+      hasQuestion: v.questions.some((q) => !q.answeredAt),
+    };
   });
 }
 export async function getEstimate(workshopId: string, id: string) {

@@ -1,5 +1,4 @@
 import { owner } from "@/lib/owner";
-import { db } from "@/lib/db";
 import { AppError, checkOrigin, readBody, throttle, hashToken } from "@/lib/security";
 import {
   createEstimate,
@@ -12,7 +11,7 @@ import {
   publicView,
   publicAction,
   status,
-  versionInclude,
+  listEstimates,
 } from "@/lib/estimates";
 import { generateExplanation } from "@/lib/ai";
 import { draftFromCatalog } from "@/lib/ai-catalog-service";
@@ -53,29 +52,7 @@ export async function GET(request: Request, context: Context) {
         aiEnabled: !!process.env.AI_API_KEY && !!process.env.AI_MODEL,
       });
     if (path[0] === "templates" && path.length === 1) return json(await listTemplates(workshop.id));
-    if (path[0] === "estimates" && path.length === 1) {
-      const estimates = await db.estimate.findMany({
-        where: { workshopId: workshop.id },
-        orderBy: { createdAt: "desc" },
-        include: { versions: { orderBy: { number: "desc" }, include: versionInclude } },
-      });
-      return json(
-        estimates.map((e) => {
-          const v = e.versions.find((v) => v.id === e.currentVersionId) ?? e.versions[0];
-          return {
-            id: e.id,
-            number: e.number,
-            device: v.device,
-            clientName: v.clientName,
-            total: v.total,
-            createdAt: e.createdAt,
-            status: status(v),
-            hasDraft: !!e.currentVersionId && e.versions.some((v) => !v.publishedAt),
-            hasQuestion: v.questions.some((q) => !q.answeredAt),
-          };
-        }),
-      );
-    }
+    if (path[0] === "estimates" && path.length === 1) return json(await listEstimates(workshop.id));
     if (path[0] === "estimates" && path.length === 2) {
       const estimate = await getEstimate(workshop.id, path[1]);
       // Link hashes are never needed by the owner browser either.
