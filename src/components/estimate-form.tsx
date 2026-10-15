@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { calculateTotal, type EstimateInput } from "@/lib/validation";
 import { money } from "@/lib/locale";
-import { api, type Estimate, type Version } from "./types";
+import { api, type Estimate, type Version, type ServiceTemplate } from "./types";
 import { Conditions, ErrorBox } from "./ui";
+import { readRecovery, recoveryPrefix } from "@/lib/draft-recovery";
 type AIResult = { problem: string; works: string; missing: string[] };
 function initial(v?: Version): EstimateInput {
   return v
@@ -35,21 +36,75 @@ export function EstimateForm({
   version,
   aiEnabled,
   onSaved,
+  workshopId,
 }: {
   estimateId?: string;
   version?: Version;
   aiEnabled: boolean;
   onSaved?: () => void;
+  workshopId: string;
 }) {
   const [form, setForm] = useState<EstimateInput>(() => initial(version)),
     [dirty, setDirty] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [preview, setPreview] = useState(false),
-    [ai, setAi] = useState<AIResult | null>(null);
+    [ai, setAi] = useState<AIResult | null>(null),
+    [aiSource, setAiSource] = useState(""),
+    [templates, setTemplates] = useState<ServiceTemplate[]>([]),
+    [templateId, setTemplateId] = useState(""),
+    [recovery, setRecovery] = useState<ReturnType<typeof readRecovery>>(null),
+    [storageError, setStorageError] = useState(false);
+  const storageKey = `${recoveryPrefix}${workshopId}:${estimateId ?? "new"}:${version?.id ?? "new"}`;
+  const [base] = useState(() => (version ? JSON.stringify(initial(version)) : "new"));
+  const source = JSON.stringify({ note: form.note, works: form.items.map((i) => i.name) });
+  const staleAI = !!ai && aiSource !== source;
   const dirtyRef = useRef(false);
   const router = useRouter();
   const previewRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    let alive = true;
+    api<ServiceTemplate[]>("templates")
+      .then((result) => {
+        if (alive) setTemplates(result);
+      })
+      .catch(() => {});
+    Promise.resolve().then(() => {
+      if (!alive) return;
+      try {
+        setRecovery(readRecovery(sessionStorage, storageKey));
+      } catch {
+        setStorageError(true);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [storageKey]);
+  useEffect(() => {
+    const persist = () => {
+      if (!dirtyRef.current) return;
+      try {
+        sessionStorage.setItem(storageKey, JSON.stringify({ form, base, savedAt: Date.now() }));
+      } catch {
+        setStorageError(true);
+      }
+    };
+    const timer = dirty ? setTimeout(persist, 400) : undefined;
+    window.addEventListener("pagehide", persist);
+    window.addEventListener("beforeunload", persist);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("pagehide", persist);
+      window.removeEventListener("beforeunload", persist);
+    };
+  }, [form, dirty, storageKey, base]);
+  function clearRecovery() {
+    try {
+      sessionStorage.removeItem(storageKey);
+    } catch {}
+    setRecovery(null);
+  }
   useEffect(() => {
     if (preview) previewRef.current?.showModal();
   }, [preview]);
@@ -93,11 +148,13 @@ export function EstimateForm({
     try {
       if (estimateId && version) {
         await api(`estimates/${estimateId}/save`, { versionId: version.id, input: form });
+        clearRecovery();
         dirtyRef.current = false;
         setDirty(false);
         onSaved?.();
       } else {
         const result = await api<Estimate>("estimates", form);
+        clearRecovery();
         dirtyRef.current = false;
         setDirty(false);
         router.push(`/estimates/${result.id}`);
@@ -111,8 +168,16 @@ export function EstimateForm({
   async function generate() {
     setBusy(true);
     setError("");
+    setAi(null);
+    setAiSource("");
     try {
-      setAi(await api<AIResult>("ai", { note: form.note, works: form.items.map((i) => i.name) }));
+      const captured = source;
+      const result = await api<AIResult>("ai", {
+        note: form.note,
+        works: form.items.map((i) => i.name),
+      });
+      setAi(result);
+      setAiSource(captured);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -154,6 +219,43 @@ export function EstimateForm({
       </div>
       <form onSubmit={save} className="editor-grid">
         <div className="editor-main">
+          {recovery && (
+            <section className="panel form-section" aria-label="Восстановление ввода">
+              <h2>Остался несохранённый ввод</h2>
+              <p>
+                Копия от {new Date(recovery.savedAt).toLocaleTimeString("ru-RU")}, только в этой
+                вкладке.
+              </p>
+              {recovery.base !== base && (
+                <p className="hint">
+                  Сохранённая версия изменилась. Восстановление заменит поля формы локальной копией;
+                  проверьте её перед сохранением.
+                </p>
+              )}
+              <div className="actions">
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => {
+                    setForm(recovery.form);
+                    setDirty(true);
+                    dirtyRef.current = true;
+                    setRecovery(null);
+                  }}
+                >
+                  Восстановить ввод
+                </button>
+                <button type="button" className="secondary" onClick={clearRecovery}>
+                  Удалить локальную копию
+                </button>
+              </div>
+            </section>
+          )}
+          <p className="hint" role="status">
+            {storageError
+              ? "Браузер не разрешил сохранить локальную копию. Сохраните черновик перед уходом."
+              : "Несохранённый ввод хранится в этой вкладке до суток и удаляется при выходе из аккаунта. Это ещё не сохранённая смета."}
+          </p>
           <section className="panel form-section">
             <h2>Клиент и устройство</h2>
             <div className="two-col">
@@ -198,6 +300,11 @@ export function EstimateForm({
             {ai && (
               <div className="ai-draft">
                 <strong>AI-черновик · проверьте факты</strong>
+                {staleAI && (
+                  <p role="alert" className="hint">
+                    Исходные данные изменились. Сформируйте новый AI-черновик перед переносом.
+                  </p>
+                )}
                 <p>{ai.problem}</p>
                 <p>{ai.works}</p>
                 {ai.missing.length > 0 && (
@@ -213,6 +320,7 @@ export function EstimateForm({
                 <button
                   type="button"
                   className="secondary"
+                  disabled={staleAI || busy}
                   onClick={() => {
                     if (
                       !form.explanation ||
@@ -241,6 +349,49 @@ export function EstimateForm({
             <div className="section-title">
               <h2>Работы и детали</h2>
               <span className="subtle-label">Цены в сумах</span>
+            </div>
+            <div className="template-picker">
+              <label>
+                Из моих работ
+                <select
+                  aria-label="Из моих работ"
+                  value={templateId}
+                  onChange={(e) => setTemplateId(e.target.value)}
+                >
+                  <option value="">Выберите сохранённую работу</option>
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} · {money(t.price)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="secondary"
+                disabled={!templateId || form.items.length >= 30}
+                onClick={() => {
+                  const selected = templates.find((t) => t.id === templateId);
+                  if (!selected) return;
+                  const item = {
+                    name: selected.name,
+                    quantity: selected.quantity,
+                    price: selected.price,
+                  };
+                  update(
+                    "items",
+                    form.items.length === 1 && !form.items[0].name && !form.items[0].price
+                      ? [item]
+                      : [...form.items, item],
+                  );
+                  setTemplateId("");
+                }}
+              >
+                Добавить из моих работ
+              </button>
+              <Link prefetch={false} href="/templates">
+                Настроить работы и цены
+              </Link>
             </div>
             {form.items.map((item, index) => (
               <div className="item-editor" key={index}>

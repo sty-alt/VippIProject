@@ -15,6 +15,7 @@ import {
   versionInclude,
 } from "@/lib/estimates";
 import { generateExplanation } from "@/lib/ai";
+import { listTemplates, saveTemplate, removeTemplate } from "@/lib/templates";
 import { z } from "zod";
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ path: string[] }> };
@@ -47,9 +48,10 @@ export async function GET(request: Request, context: Context) {
     const workshop = await owner();
     if (path[0] === "workshop")
       return json({
-        workshop: { name: workshop.name },
+        workshop: { id: workshop.id, name: workshop.name },
         aiEnabled: !!process.env.AI_API_KEY && !!process.env.AI_MODEL,
       });
+    if (path[0] === "templates" && path.length === 1) return json(await listTemplates(workshop.id));
     if (path[0] === "estimates" && path.length === 1) {
       const estimates = await db.estimate.findMany({
         where: { workshopId: workshop.id },
@@ -96,6 +98,14 @@ export async function POST(request: Request, context: Context) {
       return json(await publicAction(path[1], body));
     }
     const workshop = await owner();
+    if (path[0] === "templates") {
+      if (path.length === 1) return json(await saveTemplate(workshop.id, body), 201);
+      if (path.length === 3 && path[2] === "save")
+        return json(await saveTemplate(workshop.id, body, path[1]));
+      if (path.length === 3 && path[2] === "delete")
+        return json(await removeTemplate(workshop.id, path[1]));
+      throw new AppError("Действие недоступно.", 404);
+    }
     if (path[0] === "ai") {
       await throttle("ai", workshop.id, 5);
       return json(await generateExplanation(body));

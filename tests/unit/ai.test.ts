@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, it, expect, vi } from "vitest";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { generateExplanation, redact } from "../../src/lib/ai";
+import { generateExplanation, redact, validateExplanation } from "../../src/lib/ai";
 const input = {
   note: "Кулер шумит. email: test@example.com телефон +998 90 123 45 67",
   works: ["Чистка", "Замена кулера"],
@@ -16,6 +16,10 @@ const server = createServer(async (req, res) => {
   if (mode === "error") {
     res.writeHead(503);
     return res.end("{}");
+  }
+  if (/^\d{3}$/.test(mode)) {
+    res.writeHead(Number(mode));
+    return res.end('{"error":"private provider details"}');
   }
   const output =
     mode === "invalid"
@@ -37,12 +41,46 @@ afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 describe("HTTP AI адаптер", () => {
+  it.each([
+    "Осмотр кулера проведен",
+    "Проведена диагностика питания",
+    "Кулер заменён",
+    "Загрязнение устранено",
+  ])("не выдаёт будущие работы за выполненные: %s", (works) => {
+    expect(() =>
+      validateExplanation({ problem: "Причина пока неизвестна", works, missing: [] }),
+    ).toThrow();
+  });
+  it.each([
+    ["401", 503],
+    ["402", 503],
+    ["429", 429],
+    ["500", 503],
+  ])("понятно обрабатывает провайдера %s", async (value, status) => {
+    mode = value as string;
+    await expect(
+      generateExplanation(input, { key: "test", model: "test", base }),
+    ).rejects.toMatchObject({ status });
+  });
+  it.each([
+    "Цена двести тысяч сум",
+    "Стоимость в рублях",
+    "Гарантия три месяца",
+    "Ремонт выполнен",
+    "Скидка десять %",
+    "Напишите owner@example.test",
+    " ",
+  ])("отклоняет опасный или пустой текст: %s", (text) => {
+    expect(() =>
+      validateExplanation({ problem: text, works: "Предлагаем очистку", missing: [] }),
+    ).toThrow();
+  });
   it("отправляет OpenRouter точную схему, сохраняя серверную проверку", async () => {
     mode = "good";
     const originalFetch = globalThis.fetch;
-    const spy = vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) =>
-      originalFetch(`${base}/chat/completions`, init),
-    );
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation((_url, init) => originalFetch(`${base}/chat/completions`, init));
     try {
       await generateExplanation(input, {
         key: "test-key",
@@ -50,6 +88,7 @@ describe("HTTP AI адаптер", () => {
         base: "https://openrouter.ai/api/v1",
       });
       const body = JSON.parse(received);
+      expect(body.reasoning).toEqual({ effort: "minimal", exclude: true });
       expect(body.response_format.type).toBe("json_schema");
       expect(body.response_format.json_schema.strict).toBe(true);
       expect(body.response_format.json_schema.schema.properties.works.type).toBe("string");

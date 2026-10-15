@@ -61,6 +61,16 @@ model Workshop {
   owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   name String
   estimates Estimate[]
+  templates ServiceTemplate[]
+}
+model ServiceTemplate {
+  id String @id @default(cuid())
+  workshopId String
+  workshop Workshop @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+  name String
+  price Int
+  quantity Int @default(1)
+  @@unique([workshopId, name])
 }
 model Estimate {
   id String @id @default(cuid())

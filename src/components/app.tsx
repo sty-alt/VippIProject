@@ -9,17 +9,19 @@ import { EstimateForm } from "./estimate-form";
 import { PublicPage } from "./public-page";
 import { Logo, ErrorBox } from "./ui";
 import { api } from "./types";
+import { Templates } from "./templates";
+import { clearRecoveries } from "@/lib/draft-recovery";
 export function App() {
   const path = usePathname();
   const isPublic = path.startsWith("/c/");
-  const [workshop, setWorkshop] = useState<{ name: string } | null>(null),
+  const [workshop, setWorkshop] = useState<{ id: string; name: string } | null>(null),
     [aiEnabled, setAiEnabled] = useState(false),
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
   useEffect(() => {
     if (isPublic) return;
     let alive = true;
-    api<{ workshop: { name: string }; aiEnabled: boolean }>("workshop")
+    api<{ workshop: { id: string; name: string }; aiEnabled: boolean }>("workshop")
       .then((result) => {
         if (alive) {
           setWorkshop(result.workshop);
@@ -60,9 +62,13 @@ export function App() {
       headers: { "Content-Type": "application/json" },
       body: "{}",
     });
-    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-    if (response.ok) location.href = "/";
-    else setError("Не удалось выйти. Повторите попытку.");
+    if (response.ok) {
+      try {
+        clearRecoveries(sessionStorage);
+      } catch {}
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      location.href = "/";
+    } else setError("Не удалось выйти. Повторите попытку.");
   }
   return (
     <div className="app-shell">
@@ -76,8 +82,15 @@ export function App() {
           </div>
         </div>
         <nav>
-          <Link prefetch={false} className="nav-active" href="/">
+          <Link prefetch={false} className={path === "/" ? "nav-active" : ""} href="/">
             <span aria-hidden="true">▤</span> Сметы <span className="nav-arrow">→</span>
+          </Link>
+          <Link
+            prefetch={false}
+            className={path === "/templates" ? "nav-active" : ""}
+            href="/templates"
+          >
+            Мои работы и цены
           </Link>
           <Link prefetch={false} href="/new">
             <span aria-hidden="true">＋</span> Новая смета
@@ -101,9 +114,16 @@ export function App() {
         </header>
         <main className="workspace">
           {path === "/new" ? (
-            <EstimateForm aiEnabled={aiEnabled} />
+            <EstimateForm key={workshop.id} workshopId={workshop.id} aiEnabled={aiEnabled} />
           ) : /^\/estimates\/[^/]+$/.test(path) ? (
-            <EstimateDetail id={path.split("/")[2]} aiEnabled={aiEnabled} />
+            <EstimateDetail
+              key={path}
+              id={path.split("/")[2]}
+              workshop={workshop}
+              aiEnabled={aiEnabled}
+            />
+          ) : path === "/templates" ? (
+            <Templates />
           ) : path === "/" ? (
             <Dashboard />
           ) : (

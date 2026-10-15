@@ -37,6 +37,7 @@ export type Row = {
   hasDraft: boolean;
   hasQuestion: boolean;
 };
+export type ServiceTemplate = { id: string; name: string; price: number; quantity: number };
 export type PublicEstimate = {
   workshop: string;
   number: number;
@@ -55,13 +56,22 @@ export type PublicEstimate = {
   revoked: boolean;
 };
 export async function api<T>(path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`/api/service/${path}`, {
-    method: body === undefined ? "GET" : "POST",
-    headers: body === undefined ? {} : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    cache: "no-store",
-  });
-  const result = await response.json();
+  let response: Response;
+  try {
+    response = await fetch(`/api/service/${path}`, {
+      method: body === undefined ? "GET" : "POST",
+      headers: body === undefined ? {} : { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      cache: "no-store",
+    });
+  } catch {
+    throw new Error("Нет связи с сервером. Проверьте подключение и повторите действие.");
+  }
+  const result = await response.json().catch(() => null);
+  if (!result)
+    throw new Error(
+      "Сервер временно недоступен. Повторите позже; введённый текст остаётся в форме.",
+    );
   if (!response.ok) throw new Error(result.error || "Не удалось выполнить действие.");
   return result;
 }

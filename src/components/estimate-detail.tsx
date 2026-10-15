@@ -5,7 +5,16 @@ import { api, type Estimate } from "./types";
 import { EstimateForm } from "./estimate-form";
 import { Badge, Conditions, ErrorBox } from "./ui";
 import { date, ru } from "@/lib/locale";
-export function EstimateDetail({ id, aiEnabled }: { id: string; aiEnabled: boolean }) {
+import { PrintEstimate } from "./print-estimate";
+export function EstimateDetail({
+  id,
+  aiEnabled,
+  workshop,
+}: {
+  id: string;
+  aiEnabled: boolean;
+  workshop: { id: string; name: string };
+}) {
   const [estimate, setEstimate] = useState<Estimate | null>(null),
     [selected, setSelected] = useState(""),
     [edit, setEdit] = useState(false),
@@ -67,6 +76,7 @@ export function EstimateDetail({ id, aiEnabled }: { id: string; aiEnabled: boole
         estimateId={id}
         version={version}
         aiEnabled={aiEnabled}
+        workshopId={workshop.id}
         onSaved={() => {
           setEdit(false);
           load().catch((e) => setError(e.message));
@@ -107,6 +117,10 @@ export function EstimateDetail({ id, aiEnabled }: { id: string; aiEnabled: boole
           </select>
         </label>
         <div className="actions">
+          <PrintEstimate
+            workshop={workshop.name}
+            data={{ ...version, number: estimate.number, version: version.number }}
+          />
           {!version.publishedAt ? (
             <>
               <button disabled={busy} className="secondary" onClick={() => setEdit(true)}>

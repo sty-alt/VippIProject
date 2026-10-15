@@ -1245,3 +1245,18 @@ footer {
     scroll-behavior: auto !important;
   }
 }
+.template-picker { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 24px; }
+.template-picker label { flex: 1 1 220px; }
+.template-picker a { font-size: 13px; }
+.print-document { display: none; }
+@media print {
+  @page { size: A4; margin: 16mm; }
+  html, body { background: white !important; color: black !important; }
+  body > :not(.print-document) { display: none !important; }
+  .print-document { display: block !important; font: 11pt/1.5 Arial, sans-serif; }
+  .print-document header { margin-bottom: 24px; border-bottom: 1px solid #ccc; padding-bottom: 16px; }
+  .print-document .line-item, .print-document .conditions div, .print-document section { break-inside: avoid; }
+  .print-document .explanation { white-space: pre-wrap; }
+  .print-document h1 { font-size: 20pt; }
+  .print-document .total { margin: 20px 0; }
+}

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api, type PublicEstimate } from "./types";
 import { Badge, Conditions, ErrorBox } from "./ui";
 import { money, date } from "@/lib/locale";
+import { PrintEstimate } from "./print-estimate";
 export function PublicPage({ token }: { token: string }) {
   const [data, setData] = useState<PublicEstimate | null>(null),
     [error, setError] = useState(""),
@@ -66,6 +67,7 @@ export function PublicPage({ token }: { token: string }) {
           <Badge status={data.status} />
         </div>
         <Conditions data={data} />
+        <PrintEstimate workshop={data.workshop} data={data} />
         <ErrorBox message={error} />
         {data.decision && (
           <div className="decision-note" role="status">

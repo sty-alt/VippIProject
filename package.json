@@ -17,7 +17,10 @@
     "test:e2e": "node scripts/e2e.mjs",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "db:backup": "node scripts/backup.mjs",
+    "db:verify-restore": "node scripts/backup.mjs --verify-restore",
+    "ai:evaluate": "tsx scripts/evaluate-ai.ts"
   },
   "dependencies": {
     "@better-auth/prisma-adapter": "1.7.7",

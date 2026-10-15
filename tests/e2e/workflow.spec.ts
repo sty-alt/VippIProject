@@ -197,16 +197,44 @@ test("HTTP: сессии, изоляция мастерских, CSRF, вход�
     userEmails.push(email);
     const ctx = await playwright.request.newContext({
       baseURL: "http://localhost:3078",
-      extraHTTPHeaders: { Origin: "http://localhost:3078" },
+      // Model separate clients; the auth library also limits requests per client IP.
+      extraHTTPHeaders: {
+        Origin: "http://localhost:3078",
+        "X-Forwarded-For": `192.0.2.${contexts.length + 10}`,
+      },
     });
     contexts.push(ctx);
     const response = await ctx.post("/api/auth/sign-up/email", {
       data: { name: `Мастерская ${name}`, email, password: "TestPassword-Only!45" },
     });
-    expect(response.ok()).toBe(true);
+    expect(response.status(), await response.text()).toBe(200);
     expect((await ctx.get("/api/service/workshop")).ok()).toBe(true);
   }
   const [a, b] = contexts;
+  const template = await a.post("/api/service/templates", {
+    data: { name: "Изолированная работа", quantity: 1, price: 180000 },
+  });
+  expect(template.status()).toBe(201);
+  const templateId = (await template.json()).id;
+  expect(await (await b.get("/api/service/templates")).json()).toEqual([]);
+  expect((await b.post(`/api/service/templates/${templateId}/delete`, { data: {} })).status()).toBe(
+    404,
+  );
+  expect(
+    (
+      await b.post(`/api/service/templates/${templateId}/save`, {
+        data: { name: "Подмена", quantity: 1, price: 1 },
+      })
+    ).status(),
+  ).toBe(404);
+  expect(
+    (
+      await a.post("/api/service/templates", {
+        headers: { Origin: "https://untrusted.example" },
+        data: { name: "CSRF", quantity: 1, price: 1 },
+      })
+    ).status(),
+  ).toBe(403);
   const created = await a.post("/api/service/estimates", { data: input });
   expect(created.status()).toBe(201);
   const e = await created.json();
@@ -256,6 +284,7 @@ test("HTTP: сессии, изоляция мастерских, CSRF, вход�
     extraHTTPHeaders: { Origin: "http://localhost:3078" },
   });
   expect((await guest.get("/api/service/estimates")).status()).toBe(401);
+  expect((await guest.get("/api/service/templates")).status()).toBe(401);
   const view = await guest.get(`/api/service/public/${token}`);
   expect(view.headers()["cache-control"]).toContain("no-store");
   const publicJSON = JSON.stringify(await view.json());
