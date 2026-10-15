@@ -32,7 +32,17 @@ export function validateExplanation(input: unknown) {
     throw new Error("unsafe explanation");
   return result;
 }
-export type AIConfig = { key?: string; base?: string; model?: string };
+export type AIConfig = { key?: string; base?: string; model?: string; allowPaid?: boolean };
+export function assertAIUsageAllowed(config: AIConfig) {
+  const host = new URL(config.base || "https://api.openai.com/v1").hostname;
+  const local = ["localhost", "127.0.0.1", "[::1]"].includes(host);
+  const freeRouter = host === "openrouter.ai" && config.model?.endsWith(":free");
+  if (!local && !freeRouter && !config.allowPaid)
+    throw new AppError(
+      "Платная AI-модель отключена. Используйте бесплатную модель или заполните объяснение вручную. Разрешать платные запросы можно только после согласования расходов.",
+      503,
+    );
+}
 export const explanationJSONSchema = {
   type: "object",
   properties: {
@@ -50,6 +60,7 @@ export async function requestAI<T>(
     key: process.env.AI_API_KEY,
     base: process.env.AI_BASE_URL,
     model: process.env.AI_MODEL,
+    allowPaid: process.env.AI_ALLOW_PAID_MODELS === "true",
   },
 ) {
   if (!config.key || !config.model)
@@ -58,6 +69,7 @@ export async function requestAI<T>(
       503,
     );
   const base = config.base || "https://api.openai.com/v1";
+  assertAIUsageAllowed(config);
   try {
     const response = await fetch(`${base.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",

@@ -1,7 +1,12 @@
 import { afterAll, beforeAll, describe, it, expect, vi } from "vitest";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { generateExplanation, redact, validateExplanation } from "../../src/lib/ai";
+import {
+  generateExplanation,
+  redact,
+  validateExplanation,
+  assertAIUsageAllowed,
+} from "../../src/lib/ai";
 const input = {
   note: "Кулер шумит. email: test@example.com телефон +998 90 123 45 67",
   works: ["Чистка", "Замена кулера"],
@@ -41,6 +46,43 @@ afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 describe("HTTP AI адаптер", () => {
+  it("не отправляет HTTP-запрос к платной модели без разрешения", async () => {
+    const spy = vi.spyOn(globalThis, "fetch");
+    try {
+      await expect(
+        generateExplanation(input, {
+          key: "fixture",
+          base: "https://openrouter.ai/api/v1",
+          model: "provider/paid",
+        }),
+      ).rejects.toMatchObject({ status: 503 });
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+  it("блокирует платные внешние модели до явного разрешения", () => {
+    expect(() =>
+      assertAIUsageAllowed({ base: "https://openrouter.ai/api/v1", model: "provider/paid" }),
+    ).toThrow("после согласования");
+    expect(() =>
+      assertAIUsageAllowed({ base: "https://api.openai.com/v1", model: "paid" }),
+    ).toThrow();
+    expect(() =>
+      assertAIUsageAllowed({ base: "https://other.example/v1", model: "pretend:free" }),
+    ).toThrow();
+    expect(() =>
+      assertAIUsageAllowed({ base: "https://openrouter.ai/api/v1", model: "provider/free:free" }),
+    ).not.toThrow();
+    expect(() =>
+      assertAIUsageAllowed({
+        base: "https://openrouter.ai/api/v1",
+        model: "provider/paid",
+        allowPaid: true,
+      }),
+    ).not.toThrow();
+    expect(() => assertAIUsageAllowed({ base, model: "fixture" })).not.toThrow();
+  });
   it.each([
     "Осмотр кулера проведен",
     "Проведена диагностика питания",
@@ -84,7 +126,7 @@ describe("HTTP AI адаптер", () => {
     try {
       await generateExplanation(input, {
         key: "test-key",
-        model: "test-model",
+        model: "test-model:free",
         base: "https://openrouter.ai/api/v1",
       });
       const body = JSON.parse(received);
